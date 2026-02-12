@@ -65,18 +65,7 @@ class CausalSelfAttention(nn.Module):
 
     def forward(self, x):
         B, T, C = x.size()
-        q, k, v = self.c_attn(x).split()
-        print(x)
-
-
-
-
-
-
-
-class Block(nn.Module):
-    pass
-
-
+        q, k, v = self.c_attn(x).split(self.n_embed, dim = 2)
+        
 
 

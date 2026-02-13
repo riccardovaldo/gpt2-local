@@ -1,7 +1,5 @@
 from dataclasses import dataclass
 import torch
-import math
-import numpy
 import torch.nn as nn
 from torch.nn import functional as F
 
@@ -34,6 +32,7 @@ class MLP(nn.Module):
         self.c_fc = nn.Linear(config.n_embed, 4*config.n_embed)
         self.act = MGelu()
         self.c_proj = nn.Linear(4 * config.n_embed, config.n_embed)
+        self.c_proj._is_residual = True
         self.dropout = nn.Dropout(config.resid_pdrop)
     
     def forward(self, x):
@@ -54,6 +53,7 @@ class CausalSelfAttention(nn.Module):
 
         self.c_attn = nn.Linear(config.n_embed, 3 * config.n_embed)
         self.c_proj = nn.Linear(config.n_embed, config.n_embed)
+        self.c_proj._is_residual = True
 
         self.attn_dropout = nn.Dropout(config.attn_pdrop)
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
@@ -104,12 +104,69 @@ class Block(nn.Module):
         x = x + self.att(self.ln1(x))
         x = x + self.mlp(self.ln2(x))
         return x
+
+        
+        
+class GPT(nn.Module):
     
-
+    def __init__(self, config: GPTConfig):
+        super().__init__()
+        self.transformer = nn.ModuleDict(
+            dict(
+                wte = nn.Embedding(config.vocab_size, config.n_embed),
+                wpe = nn.Embedding(config.block_size, config.n_embed),
+                h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+                ln_f = nn.LayerNorm(config.n_embed)))
         
-        
-        
+        self.lm_head = nn.Linear(config.n_embed, config.vocab_size, bias=False)
 
-        
+        self.apply(self._init_weights)
 
 
+    def _init_weights(self, module, config):
+        """Initialize weights wrt to GPT2 paper"""
+
+        if isinstance(module, nn.Linear):
+            std = 0.02
+            if hasattr(module, '_is_residual'):
+                std *= (2 * config.n_layer) ** -0.5
+            nn.init.normal_(module.weight, mean = 0.0, std = std)
+            if module.bias is not None: 
+                nn.init.zeros_(module.bias)
+
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean = 0.0, std = 0.02)
+
+        elif isinstance(module, nn.LayerNorm):
+            nn.init.zeros_(module.bias)
+            nn.init.ones_(module.weight)
+
+    def forward(self, idx, targets = None):
+        B, T = idx.size()
+        device = idx.device
+
+        #Initialize embeddings
+        pos  = torch.arange(0, T, device = device)
+        x = self.transformer.wte(idx) + self.transformer.wpe(pos)
+
+        #Run through blocks
+        for block in self.transformer.h:
+            x = block(x)
+
+        #Final step
+        x = self.transformer.ln_f(x)
+        logits = self.lm_head(x)
+
+        loss = None
+        if targets is not None:
+            loss = F.cross_entropy(logits.view(-1, logits.size(dim=-1)), targets.view(-1), ignore_index=-1)
+            #ignore index is used to avoid the loss computation when sentences are shorter than block size
+        return logits, loss
+
+
+
+
+
+
+
+  

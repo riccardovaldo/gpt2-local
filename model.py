@@ -111,6 +111,7 @@ class GPT(nn.Module):
     
     def __init__(self, config: GPTConfig):
         super().__init__()
+        self.config = config
         self.transformer = nn.ModuleDict(
             dict(
                 wte = nn.Embedding(config.vocab_size, config.n_embed),
@@ -123,13 +124,13 @@ class GPT(nn.Module):
         self.apply(self._init_weights)
 
 
-    def _init_weights(self, module, config):
+    def _init_weights(self, module):
         """Initialize weights wrt to GPT2 paper"""
 
         if isinstance(module, nn.Linear):
             std = 0.02
             if hasattr(module, '_is_residual'):
-                std *= (2 * config.n_layer) ** -0.5
+                std *= (2 * self.config.n_layer) ** -0.5
             nn.init.normal_(module.weight, mean = 0.0, std = std)
             if module.bias is not None: 
                 nn.init.zeros_(module.bias)
@@ -162,6 +163,38 @@ class GPT(nn.Module):
             loss = F.cross_entropy(logits.view(-1, logits.size(dim=-1)), targets.view(-1), ignore_index=-1)
             #ignore index is used to avoid the loss computation when sentences are shorter than block size
         return logits, loss
+
+    @torch.no_grad()
+    def generate(self, idx, max_new_tokens, do_sample = False, top_k = None, temperature = 1.0):
+
+        for t in range(max_new_tokens):
+            idx_cond = idx[:, -self.config.block_size:]
+
+            logits, _ = self(idx_cond)
+            logits = logits[:, -1, :] / temperature
+
+            if top_k is not None:
+                values, _ = torch.topk(logits, min(top_k, logits.size(-1))
+
+                #set the values less then topK to -inf to exclude them from the softmax
+                logits[logits < values[:, [-1]]] = float("-Inf")
+            probs = F.softmax(logits, dim=-1)
+
+            if do_sample:
+                idx_next = torch.multinomial(probs, num_samples=1)
+            else:
+                _, idx_next = torch.topk(probs, k=1, dim=-1)
+
+            idx = torch.cat((idx, idx_next), dim=1)
+        
+        return idx
+            
+
+                
+
+                
+
+
 
 
 

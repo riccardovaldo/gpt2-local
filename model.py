@@ -188,9 +188,18 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
         
         return idx
-            
 
+    @classmethod     
+    def from_pretrained(cls):
+        """
+        Loader for the GPT2 original weights from Hugging Face
+        """
+        from transfomers import GPT2LMHeadModel
+        print("Loading the official GPT2 (124M) weights...")
+        
+        
                 
+
 
                 
 

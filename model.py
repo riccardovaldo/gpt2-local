@@ -46,7 +46,7 @@ class MLP(nn.Module):
 class CausalSelfAttention(nn.Module):
     """Implementation of the Attention Module"""
 
-    def __init__(self, config):
+    def __init__(self, config: GPTConfig):
         super().__init__()
 
         #check if the dmodel adapts to the n. of heads which are acting only on subsection of the dimensions
@@ -58,14 +58,58 @@ class CausalSelfAttention(nn.Module):
         self.attn_dropout = nn.Dropout(config.attn_pdrop)
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
 
-        #check for the casual masking 
+        #automatically moves the mask to a device if the model is sent to the same device
+        #if not I'd have to move the mask manually in the forward pass making it less efficient
+        self.register_buffer("mask", torch.tril(torch.ones(config.block_size, config.size))\
+                             .view(1,1,config.block_size, config.block_size))
 
         self.n_head = config.n_head
         self.n_embed = config.n_embed
 
     def forward(self, x):
         B, T, C = x.size()
+        #splitting on the 2nd dimension because rn I do have a giant M = (B,T,3C)
         q, k, v = self.c_attn(x).split(self.n_embed, dim = 2)
+
+        #introduce heads in the computations
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1,2) #(B,nH,T,nD)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1,2) #(B,nH,T,nD)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1,2) #(B,nH,T,nD)
+
+        att = q@k.transpose(-2,-1) * (1.0 / torch.sqrt(k.size(-1)))
+        #casual mask application
+        #:T is used for adaptability to the dataset being used
+        att = att.masked_fill(self.mask[:,:,:T,:T] == 0, float("-inf")) 
+        #softmax across the last dimension, which means horizontally on the columns
+        att = F.softmax(att, dim = -1)
+        att = self.attn_dropout(att)
+
+        y = att @ v #(B,nH,T,T) @ (B,nH,T,nD) = B,nH,T,nD)
+        y = y.transpose(1,2).contiguous().view(B,T,C) #recompose heads
+
+        y = self.c_proj(y)
+        y = self.resid_dropout(y)
+
+        return y 
+
+class Block(nn.Module):
+    def __init__(self, config: GPTConfig):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(config.n_embed)
+        self.attn = CausalSelfAttention(config)
+        self.ln2 = nn.LayerNorm(config.n_embed)
+        self.mlp = MLP(config)
+
+    def forward(self, x):
+        x = x + self.att(self.ln1(x))
+        x = x + self.mlp(self.ln2(x))
+        return x
+    
+
+        
+        
+        
+
         
 
 

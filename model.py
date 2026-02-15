@@ -174,7 +174,7 @@ class GPT(nn.Module):
             logits = logits[:, -1, :] / temperature
 
             if top_k is not None:
-                values, _ = torch.topk(logits, min(top_k, logits.size(-1))
+                values, _ = torch.topk(logits, min(top_k, logits.size(-1)))
 
                 #set the values less then topK to -inf to exclude them from the softmax
                 logits[logits < values[:, [-1]]] = float("-Inf")
@@ -194,21 +194,32 @@ class GPT(nn.Module):
         """
         Loader for the GPT2 original weights from Hugging Face
         """
-        from transfomers import GPT2LMHeadModel
+        from transformers import GPT2LMHeadModel
         print("Loading the official GPT2 (124M) weights...")
+
+        config = GPTConfig
+        model = GPT(config)
+        sd = model.state_dict()
+
+        model_hf = GPT2LMHeadModel.from_pretrained('gpt2')
+        sd_hf = model_hf.state_dict()
+
+        keys = [k for k in sd_hf if not k.endswith('attn.masked_bias')] # we do not import the lower triangular mask in casual attention
+        #needs to be transposed because of the openai conv1d
+        transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
+
+        assert len(keys) == len(sd)
         
+        for k in keys:
+            if any(k.endswith(w) for w in transposed):
+                assert sd[k].shape == sd_hf[k].shape[::-1]  
+                with torch.no_grad():
+                    sd[k].copy_(sd_hf[k].t())
+            else:
+                assert sd[k].shape == sd_hf[k].shape
+                with torch.no_grad():
+                    sd[k].copy_(sd_hf[k])
         
+        return model
+
                 
-
-
-                
-
-
-
-
-
-
-
-
-
-  

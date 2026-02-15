@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import torch
+import math
 import torch.nn as nn
 from torch.nn import functional as F
 
@@ -21,12 +22,12 @@ class MGelu(nn.Module):
     """Modified Gelu implementation to adapt the GPT 2 official GELU"""
 
     def forward(self, x):
-        return 0.5*x*(1.0 + torch.tanh(torch.sqrt(2/torch.pi)*(x + 0.047715 * torch.pow(x, 3.0))))
+        return 0.5*x*(1.0 + torch.tanh(math.sqrt(2/torch.pi)*(x + 0.047715 * torch.pow(x, 3.0))))
     
 class MLP(nn.Module):
     """Implementation of the MLP"""
     def __init__(self, config: GPTConfig):
-        super().__init()
+        super().__init__()
 
         #Mantaining the layer names used in the original implementation to smooth out the process of preloading original weights
         self.c_fc = nn.Linear(config.n_embed, 4*config.n_embed)
@@ -60,7 +61,7 @@ class CausalSelfAttention(nn.Module):
 
         #automatically moves the mask to a device if the model is sent to the same device
         #if not I'd have to move the mask manually in the forward pass making it less efficient
-        self.register_buffer("mask", torch.tril(torch.ones(config.block_size, config.size))\
+        self.register_buffer("mask", torch.tril(torch.ones(config.block_size, config.block_size))\
                              .view(1,1,config.block_size, config.block_size))
 
         self.n_head = config.n_head
@@ -76,7 +77,7 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1,2) #(B,nH,T,nD)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1,2) #(B,nH,T,nD)
 
-        att = q@k.transpose(-2,-1) * (1.0 / torch.sqrt(k.size(-1)))
+        att = q@k.transpose(-2,-1) * (1.0 / math.sqrt(k.size(-1)))
         #casual mask application
         #:T is used for adaptability to the dataset being used
         att = att.masked_fill(self.mask[:,:,:T,:T] == 0, float("-inf")) 
@@ -95,14 +96,14 @@ class CausalSelfAttention(nn.Module):
 class Block(nn.Module):
     def __init__(self, config: GPTConfig):
         super().__init__()
-        self.ln1 = nn.LayerNorm(config.n_embed)
+        self.ln_1 = nn.LayerNorm(config.n_embed)
         self.attn = CausalSelfAttention(config)
-        self.ln2 = nn.LayerNorm(config.n_embed)
+        self.ln_2 = nn.LayerNorm(config.n_embed)
         self.mlp = MLP(config)
 
     def forward(self, x):
-        x = x + self.att(self.ln1(x))
-        x = x + self.mlp(self.ln2(x))
+        x = x + self.attn(self.ln_1(x))
+        x = x + self.mlp(self.ln_2(x))
         return x
 
         
@@ -203,13 +204,14 @@ class GPT(nn.Module):
 
         model_hf = GPT2LMHeadModel.from_pretrained('gpt2')
         sd_hf = model_hf.state_dict()
-
+        
         keys = [k for k in sd_hf if not k.endswith('attn.masked_bias')] # we do not import the lower triangular mask in casual attention
         #needs to be transposed because of the openai conv1d
         transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
 
-        assert len(keys) == len(sd)
-        
+        sd_keys = [k for k in sd.keys() if not k.endswith('attn.bias')]
+        assert len(keys) == len(sd_keys), f"mismatched keys: {len(keys)} != {len(sd_keys)}"
+
         for k in keys:
             if any(k.endswith(w) for w in transposed):
                 assert sd[k].shape == sd_hf[k].shape[::-1]  

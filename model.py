@@ -4,6 +4,13 @@ import math
 import torch.nn as nn
 from torch.nn import functional as F
 
+import os
+import transformers
+from huggingface_hub.utils import disable_progress_bars
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+disable_progress_bars()
+transformers.utils.logging.set_verbosity_error()
+
 
 @dataclass
 class GPTConfig:
@@ -166,7 +173,7 @@ class GPT(nn.Module):
         return logits, loss
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, do_sample = False, top_k = None, temperature = 1.0):
+    def generate(self, idx, max_new_tokens, do_sample = False, top_k = None, temperature = 1.0, stop_on_nl = False):
 
         for t in range(max_new_tokens):
             idx_cond = idx[:, -self.config.block_size:]
@@ -187,8 +194,53 @@ class GPT(nn.Module):
                 _, idx_next = torch.topk(probs, k=1, dim=-1)
 
             idx = torch.cat((idx, idx_next), dim=1)
+
         
         return idx
+
+
+    def configure_optimizer(self, train_config):
+        """ This function return a torch optimizer object containing all the parameter divided into two categories:
+            - the one that will experience weight decay
+            - the once NOT affected by weight decay like bias, embeddings, layernorm
+        """
+
+        decay = set()
+        no_decay = set()
+        affected_layer = (nn.Linear,)
+        unaffected_layer = (nn.LayerNorm, nn.Embedding)
+
+        #go through module names, module and for every module get the params
+        for mn, m in self.named_modules():
+            for pn, p in m.named_parameters():
+                fpn = f"{mn}.{pn}" if mn else pn # get the full params name i.e. transormer.layer_1.attention.weight
+                
+                if pn.endswith('bias'):
+                    no_decay.add(fpn)
+                elif pn.endswith('weight') and isinstance(m, affected_layer):
+                    decay.add(fpn)
+                elif pn.endswith('weight') and isinstance(m, unaffected_layer):
+                    no_decay.add(fpn)
+
+        #num of params validation
+        param_dict = {pn:p for pn, p in self.named_parameters()}
+        intersec = decay & no_decay
+        union = decay | no_decay
+
+        assert len(intersec) == 0, f" Params: {intersec} made into both decay and no_decay set"
+        assert len(param_dict.keys() - union) == 0, "Params: {intersec} were not included in one of two categories"
+
+        optim_groups = [
+            {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay" : train_config.weight_decay},
+            {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay" : 0.0}
+        ]
+    
+        optimizer = torch.optim.AdamW(optim_groups, lr = train_config.lr, betas= train_config.betas)
+        return optimizer
+
+
+        
+
 
     @classmethod     
     def from_pretrained(cls):

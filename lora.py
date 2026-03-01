@@ -13,7 +13,7 @@ class LoRAConfig:
     target_layers: List[str] = field(default_factory= lambda: ["c_attn", "c_proj", "c_fc"])
 
 class LoRA(nn.Module):
-    def __init__(self, original_layer: nn.Linear, config: LoRAConfig = LoRAConfig()):
+    def __init__(self, original_layer: nn.Linear, config: LoRAConfig):
         super().__init__()
 
         #save and freeze the original layer
@@ -64,7 +64,8 @@ class LoRA(nn.Module):
             for cn, c in m.named_children():
                 
                 if isinstance(c, nn.Linear) and any(target in cn for target in config.target_layers):
-
+                    
+                    print(f"Injecting LoRA on {mn}.{cn}...")
                     lora_layer = cls(c)
                     setattr(m, cn, lora_layer)
         

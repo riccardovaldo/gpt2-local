@@ -1,5 +1,31 @@
+import argparse
+import torch
+from torch.optim import AdamW
+
+from data import get_dataloaders
+from model import GPT, GPTConfig
+from lora import LoRA, LoRAConfig
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train a local version of GPT2")
+
+    #general args
+    parser.add_argument("--batch_size", type=int, default=4, help="Batch size per step")
+    parser.add_argument("--block_size", type=int, default=128, help="Context window size")
+    parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
+    parser.add_argument("--epochs", type=int, default=3, help="Number of full passes over data")
+
+    #lora args
+    parser.add_argument("--use_lora", action="store_true", help="Add this flag to enable Low Rank Adaptation")
+    parser.add_argument("--lora_rank", type=int, default=4, help="Rank for LoRA matrices")
+    parser.add_argument("--lora_alpha", type=int, default=16, help="Alpha scaling parameter for LoRA")
+
+    return parser.parse_args()
+
+
 def main():
-    print("Hello from gpt2-local!")
+    pass
+    
 
 
 if __name__ == "__main__":

@@ -119,6 +119,10 @@ class GPT(nn.Module):
     
     def __init__(self, config: GPTConfig):
         super().__init__()
+
+        if config is None:
+            config = GPTConfig()
+
         self.config = config
         self.transformer = nn.ModuleDict(
             dict(

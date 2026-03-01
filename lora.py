@@ -13,8 +13,11 @@ class LoRAConfig:
     target_layers: List[str] = field(default_factory= lambda: ["c_attn", "c_proj", "c_fc"])
 
 class LoRA(nn.Module):
-    def __init__(self, original_layer: nn.Linear, config: LoRAConfig):
+    def __init__(self, original_layer: nn.Linear, config: LoRAConfig = None):
         super().__init__()
+
+        if config is None:
+            config = LoRAConfig()
 
         #save and freeze the original layer
         self.original_layer = original_layer
@@ -27,14 +30,15 @@ class LoRA(nn.Module):
         self.out_features = original_layer.out_features
 
         #lora params
-        self.rank = config.rank
-        self.alpha = config.alpha
+        self.config = config
+        self.rank = self.config.rank
+        self.alpha = self.config.alpha
         self.scaling = self.alpha / self.rank
 
         #lora layer
         self.lora_b = nn.Linear(self.in_features, self.rank, bias = False)
         self.lora_a = nn.Linear(self.rank, self.out_features, bias = False)
-        self.dropout = nn.Dropout(p= config.dropout)
+        self.dropout = nn.Dropout(p= self.config.dropout)
 
         #initialiaze only lora A and B
         self.reset_params()
@@ -55,10 +59,12 @@ class LoRA(nn.Module):
         return y
 
     @classmethod
-    def inject_lora(cls, model, config: LoRAConfig):
+    def inject_lora(cls, model, config: LoRAConfig = None):
         """
         Take a GPT class model as an arg and inject lora layers in place of any linear layer but lm_head 
         """
+        if config is None:
+            config = LoRAConfig()
 
         for mn, m in model.named_modules():
             for cn, c in m.named_children():

@@ -117,7 +117,7 @@ class Block(nn.Module):
         
 class GPT(nn.Module):
     
-    def __init__(self, config: GPTConfig):
+    def __init__(self, config: GPTConfig = GPTConfig()):
         super().__init__()
         self.config = config
         self.transformer = nn.ModuleDict(
@@ -238,10 +238,6 @@ class GPT(nn.Module):
         optimizer = torch.optim.AdamW(optim_groups, lr = train_config.lr, betas= train_config.betas)
         return optimizer
 
-
-        
-
-
     @classmethod     
     def from_pretrained(cls):
         """
@@ -250,8 +246,7 @@ class GPT(nn.Module):
         from transformers import GPT2LMHeadModel
         print("Loading the official GPT2 (124M) weights...")
 
-        config = GPTConfig
-        model = GPT(config)
+        model = GPT()
         sd = model.state_dict()
 
         model_hf = GPT2LMHeadModel.from_pretrained('gpt2')

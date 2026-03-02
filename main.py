@@ -24,7 +24,25 @@ def parse_args():
 
 
 def main():
-    pass
+    args = parse_args()
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f"Running on {device}")
+    
+    train, val = get_dataloaders(args.batch_size, args.block_size)
+
+    print("Initializing the model...")
+    model = GPT.from_pretrained()
+
+    if args.use_lora:
+        print("Injecting LoRA modules inside the model")
+        model = LoRA.inject_lora(model, LoRAConfig)
+    else:
+        print("Training the entire model without LoRA")
+    
+    model = model.to(device)
+
+    #training loop
+
     
 
 

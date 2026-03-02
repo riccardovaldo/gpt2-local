@@ -1,2 +1,4 @@
 .env
+.github
 test.ipynb
+verify.py

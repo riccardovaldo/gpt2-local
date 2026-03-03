@@ -5,6 +5,7 @@ from torch.optim import AdamW
 from data import get_dataloaders
 from model import GPT, GPTConfig
 from lora import LoRA, LoRAConfig
+from trainer import train_model, evaluate_loss
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train a local version of GPT2")
@@ -31,7 +32,7 @@ def main():
     train, val = get_dataloaders(args.batch_size, args.block_size)
 
     print("Initializing the model...")
-    model = GPT.from_pretrained()
+    pretrained_model = GPT.from_pretrained()
 
     if args.use_lora:
         print("Injecting LoRA modules inside the model")
@@ -42,6 +43,10 @@ def main():
     model = model.to(device)
 
     #training loop
+    # finetuned_model = train_model(model= pretrained_model,
+    #                               train_loader= train)
+
+
 
     
 

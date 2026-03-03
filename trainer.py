@@ -16,7 +16,7 @@ def evaluate_loss(model, val_loader, device):
     model.train()
     return total_loss/len(val_loader)
 
-def train(model, 
+def train_model(model, 
         train_loader: DataLoader,
         val_loader: DataLoader,
         optimizer: torch.optim,
@@ -31,6 +31,10 @@ def train(model,
     for epoch in range(epochs):
         total_train_loss = 0.0
         for step, (x,y) in enumerate(train_loader):
+            x, y = x.to(device), y.to(device)
+
+            optimizer.zero_grad()
+
             logits, loss = model(x, targets = y)
             loss.backward()
 
@@ -43,7 +47,7 @@ def train(model,
     
         avg_train_loss = total_train_loss/len(train_loader)
         avg_val_loss = evaluate_loss(model, val_loader, device)
-        print("===== Epoch {epoch + 1} completed =====")
+        print(f"===== Epoch {epoch + 1} completed =====")
         print(f"Train loss: {avg_train_loss:.4f} | Validation Loss: {avg_val_loss:.4f}")
     
     print("Training complete!")

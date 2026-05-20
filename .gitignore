@@ -1,5 +1,7 @@
 .env
-.github/prompts/
+.github/prompts
+.venv/
+__pycache__/
 test.ipynb
 verify.py
 /models/

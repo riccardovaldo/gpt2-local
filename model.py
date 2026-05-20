@@ -177,7 +177,7 @@ class GPT(nn.Module):
         return logits, loss
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, do_sample = False, top_k = None, temperature = 1.0, stop_on_nl = False):
+    def generate(self, idx, max_new_tokens, do_sample = False, top_k = None, temperature = 1.0):
 
         for t in range(max_new_tokens):
             idx_cond = idx[:, -self.config.block_size:]
@@ -197,10 +197,11 @@ class GPT(nn.Module):
             else:
                 _, idx_next = torch.topk(probs, k=1, dim=-1)
 
+            next_token = idx_next[0,0].item()
             idx = torch.cat((idx, idx_next), dim=1)
 
-        
-        return idx
+            yield next_token
+
 
 
     def configure_optimizer(self, train_config):

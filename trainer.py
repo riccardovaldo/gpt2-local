@@ -89,7 +89,7 @@ def main():
 
     if args.use_lora:
         print("Injecting LoRA modules inside the model")
-        model = LoRA.inject_lora(pretrained_model, lora_config= LoRAConfig(
+        model = LoRA.inject_lora(pretrained_model, config= LoRAConfig(
             rank = args.lora_rank,
             alpha = args.lora_alpha,
             dropout= args.lora_dropout

@@ -55,6 +55,7 @@ def get_dataloaders(batch_size: int = 4, block_size: int = 1024):
                               shuffle= False,
                               drop_last = True
                             )
+    return train_loader, val_loader
 
 
 

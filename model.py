@@ -117,7 +117,7 @@ class Block(nn.Module):
         
 class GPT(nn.Module):
     
-    def __init__(self, config: GPTConfig):
+    def __init__(self, config: GPTConfig = None):
         super().__init__()
 
         if config is None:
@@ -177,7 +177,7 @@ class GPT(nn.Module):
         return logits, loss
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, do_sample = False, top_k = None, temperature = 1.0):
+    def generate(self, idx, max_new_tokens, do_sample = True, top_k = 5, temperature = 1.0):
 
         for t in range(max_new_tokens):
             idx_cond = idx[:, -self.config.block_size:]
@@ -198,7 +198,12 @@ class GPT(nn.Module):
                 _, idx_next = torch.topk(probs, k=1, dim=-1)
 
             next_token = idx_next[0,0].item()
+
+            if next_token == 50256: #break if endoftext is triggered
+                break
+
             idx = torch.cat((idx, idx_next), dim=1)
+            
 
             yield next_token
 

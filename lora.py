@@ -36,12 +36,15 @@ class LoRA(nn.Module):
         self.scaling = self.alpha / self.rank
 
         #lora layer
-        self.lora_b = nn.Linear(self.in_features, self.rank, bias = False)
-        self.lora_a = nn.Linear(self.rank, self.out_features, bias = False)
+        self.lora_a = nn.Linear(self.in_features, self.rank, bias = False)
+        self.lora_b = nn.Linear(self.rank, self.out_features, bias = False)
         self.dropout = nn.Dropout(p= self.config.dropout)
 
         #initialiaze only lora A and B
         self.reset_params()
+
+        #merge params to speed up inference
+        self.is_merged = False
     
     def reset_params(self):
         """
@@ -51,11 +54,25 @@ class LoRA(nn.Module):
         nn.init.kaiming_uniform_(self.lora_a.weight) 
         nn.init.zeros_(self.lora_b.weight)
     
+    def merge_weights(self):
+        if self.is_merged:
+            return 
+        
+        with torch.no_grad:
+            delta_w = (self.lora_b.weight @ self.lora_a.weight) * self.scaling
+            self.original_layer = self.original_layer + delta_w
+        
+        self.is_merged = True
+    
     def forward(self, x):
         w_x = self.original_layer(x)
+        
+        if self.is_merged:
+            return w_x
+        
         a_x = self.lora_a(self.dropout(x))
-        b_x = self.lora_b(a_x)
-        y = w_x + self.lora_b(a_x) * self.scaling
+        ba_x = self.lora_b(a_x)
+        y = w_x + ba_x * self.scaling
         return y
 
     @classmethod
@@ -66,16 +83,28 @@ class LoRA(nn.Module):
         if config is None:
             config = LoRAConfig()
 
+        to_replace = []
         for mn, m in model.named_modules():
             for cn, c in m.named_children():
-                
                 if isinstance(c, nn.Linear) and any(target in cn for target in config.target_layers):
-                    
-                    print(f"Injecting LoRA on {mn}.{cn}...")
-                    lora_layer = cls(c)
-                    setattr(m, cn, lora_layer)
+                    to_replace.append((m, cn, c))
+
+        for m, cn, c in to_replace:
+            print(f"Injecting LoRA on layer: {cn}")
+            lora_layer = cls(c, config)
+            setattr(m, cn, lora_layer)
         
         return model
+    
+    @classmethod
+    def merge_and_unload(cls, model):
+        for mn, m in model.named_modules():
+            if isinstance(m, cls):
+                m.merge_weights()
+        print("All the lora layers have been merged successfully.")
+        return model
+    
+    
         
 
 

@@ -58,9 +58,10 @@ class LoRA(nn.Module):
         if self.is_merged:
             return 
         
-        with torch.no_grad:
+        with torch.no_grad():
+         
             delta_w = (self.lora_b.weight @ self.lora_a.weight) * self.scaling
-            self.original_layer = self.original_layer + delta_w
+            self.original_layer.weight.data += delta_w
         
         self.is_merged = True
     
@@ -104,7 +105,7 @@ class LoRA(nn.Module):
         print("All the lora layers have been merged successfully.")
         return model
     
-    
+
         
 
 

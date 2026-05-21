@@ -6,6 +6,7 @@ from datetime import datetime
 from data import get_dataloaders
 from model import GPT
 from lora import LoRA, LoRAConfig
+import mlflow
 
 @torch.no_grad()
 def evaluate_loss(model, val_loader, device):
@@ -47,11 +48,19 @@ def train_model(model,
             optimizer.step()
             total_train_loss += loss.item()
 
+            #step logs
+            global_step = epoch * len(train_loader) + step
+            mlflow.log_metric("step_train_loss", loss.item(), step = global_step )
+
             if step % 100 == 0:
                 print(f"Epoch {epoch+1}/{epochs} | Step {step} | Train Loss: {loss.item():.4f}")
     
         avg_train_loss = total_train_loss/len(train_loader)
         avg_val_loss = evaluate_loss(model, val_loader, device)
+
+        #epochs logs
+        mlflow.log_metrics({"avg_train_loss": avg_train_loss, "avg_val_loss" : avg_val_loss}, step = epoch)
+
         print(f"===== Epoch {epoch + 1} completed =====")
         print(f"Train loss: {avg_train_loss:.4f} | Validation Loss: {avg_val_loss:.4f}")
     
@@ -72,59 +81,75 @@ def parse_args():
     parser.add_argument("--use_lora", action = "store_true", help = "Add this flag to enable Low Rank Adaptation")
     parser.add_argument("--lora_rank", type = int, default = 4, help = "Rank for LoRA matrices")
     parser.add_argument("--lora_alpha", type = int, default = 16, help = "Alpha scaling parameter for LoRA")
-    parser.add_argument("--lora_dropout", type = float, default = 0.05, help = "Dropout percentage applied to the lora layers."   )
+    parser.add_argument("--lora_dropout", type = float, default = 0.05, help = "Dropout percentage applied to the lora layers.")
+
+
 
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+    
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Running on {device}")
-    
-    train, val = get_dataloaders(args.batch_size, args.block_size)
 
-    print("Initializing the model...")
-    pretrained_model = GPT.from_pretrained()
+    mlflow.set_experiment("GPT-2 Finetuning")
 
-    if args.use_lora:
-        print("Injecting LoRA modules inside the model")
-        model = LoRA.inject_lora(pretrained_model, config= LoRAConfig(
-            rank = args.lora_rank,
-            alpha = args.lora_alpha,
-            dropout= args.lora_dropout
-            ))
-        trainable_params = [p for p in model.parameters() if p.requires_grad]
-        optimizer = torch.optim.AdamW(trainable_params, 
-                                      lr = args.lr, 
-                                      weight_decay = 0.01) #optimizer defaul when using lora
-    else:
-        print("Training the entire model without LoRA")
-        model = pretrained_model 
-        optimizer = GPT.configure_optimizer() #optimizer w/ weight decay when performing classic ft
-    
-    model = model.to(device)
+    with mlflow.start_run():
 
-    #training loop 
-    ft_model = train_model(model = model,
-                           train_loader = train,
-                           val_loader = val,
-                           optimizer = optimizer ,
-                           epochs = args.epochs,
-                           device = device)
-    
-    os.makedirs("./models/", exist_ok = True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        params = vars(args)
+        if not params['use_lora']:
+            params = {k:v for k,v in params.items() if not k.startswith('lora_')}
+        mlflow.log_params(params)
+        mlflow.log_param('device', device)
 
-    if args.use_lora:
-        state_to_save = {k:v for k,v in ft_model.state_dict().item() if k.__contains__("lora")}
-        save_path = f"./models/model_loraft_{timestamp}.pt"
-    else: 
-        state_to_save = ft_model.state_dict()
-        save_path = f"./models/model_ft_{timestamp}.pt"
+        train, val = get_dataloaders(args.batch_size, args.block_size)
+
+        print("Initializing the model...")
+        pretrained_model = GPT.from_pretrained()
+
+        if args.use_lora:
+            print("Injecting LoRA modules inside the model")
+            model = LoRA.inject_lora(pretrained_model, config= LoRAConfig(
+                rank = args.lora_rank,
+                alpha = args.lora_alpha,
+                dropout= args.lora_dropout
+                ))
+            trainable_params = [p for p in model.parameters() if p.requires_grad]
+            optimizer = torch.optim.AdamW(trainable_params, 
+                                        lr = args.lr, 
+                                        weight_decay = 0.01) #optimizer defaul when using lora
+        else:
+            print("Training the entire model without LoRA")
+            model = pretrained_model 
+            optimizer = GPT.configure_optimizer() #optimizer w/ weight decay when performing classic ft
         
-    torch.save(state_to_save, save_path)
-    print(f"Model weights saved successfully to {save_path}.")
+        model = model.to(device)
+
+        #training loop 
+        ft_model = train_model(model = model,
+                            train_loader = train,
+                            val_loader = val,
+                            optimizer = optimizer ,
+                            epochs = args.epochs,
+                            device = device)
+        
+        os.makedirs("./models/", exist_ok = True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if args.use_lora:
+            state_to_save = {k:v for k,v in ft_model.state_dict().item() if k.__contains__("lora")}
+            save_path = f"./models/model_loraft_{timestamp}.pt"
+        else: 
+            state_to_save = ft_model.state_dict()
+            save_path = f"./models/model_ft_{timestamp}.pt"
+            
+        torch.save(state_to_save, save_path)
+        print(f"Model weights saved successfully to {save_path}.")
+
+        #save the artifact to mlflow storage server
+        mlflow.log_artifact(save_path)
+
 
 if __name__ == "__main__":
     main()

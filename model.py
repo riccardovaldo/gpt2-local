@@ -223,7 +223,7 @@ class GPT(nn.Module):
         #go through module names, module and for every module get the params
         for mn, m in self.named_modules():
             for pn, p in m.named_parameters():
-                fpn = f"{mn}.{pn}" if mn else pn # get the full params name i.e. transormer.layer_1.attention.weight
+                fpn = f"{mn}.{pn}" if mn else pn # get the full params name i.e. transformer.layer_1.attention.weight
                 
                 if pn.endswith('bias'):
                     no_decay.add(fpn)

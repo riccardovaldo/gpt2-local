@@ -64,7 +64,7 @@ def parse_args():
 
     #general args
     parser.add_argument("--batch_size", type = int, default = 4, help = "Batch size per step")
-    parser.add_argument("--block_size", type = int, default = 128, help = "Context window size")
+    parser.add_argument("--block_size", type = int, default = 256, help = "Context window size")
     parser.add_argument("--lr", type = float, default = 3e-4, help = "Learning rate")
     parser.add_argument("--epochs", type = int, default = 3, help = "Number of full passes over data")
 
@@ -117,10 +117,10 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     if args.use_lora:
-        state_to_save = {k:v for k,v in model.state_dict().item() if k.__contains__("lora")}
+        state_to_save = {k:v for k,v in ft_model.state_dict().item() if k.__contains__("lora")}
         save_path = f"./models/model_loraft_{timestamp}.pt"
     else: 
-        state_to_save = model.state_dict()
+        state_to_save = ft_model.state_dict()
         save_path = f"./models/model_ft_{timestamp}.pt"
         
     torch.save(state_to_save, save_path)

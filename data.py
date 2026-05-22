@@ -27,15 +27,15 @@ class ShakespearData(Dataset):
         print(f"The dataset has {len(self.tokens)} tokens.")
     
     def __len__(self,):
-        #avoid going over the end of the data
-        return len(self.tokens) - self.block_size
+        return len(self.tokens)//self.block_size
     
     def __getitem__(self, idx):
-        item = self.tokens[idx : idx + self.block_size + 1]
+        start_idx = idx * self.block_size
+        end_idx = start_idx + self.block_size
 
-        x = torch.tensor(item[:-1], dtype=torch.long)
-        y = torch.tensor(item[1:], dtype=torch.long)
-
+        item = self.tokens[start_idx:end_idx + 1]
+        x = torch.tensor(item[:-1], dtype = torch.long)
+        y = torch.tensor(item[1:], dtype = torch.long)
         return x,y
 
 def get_dataloaders(batch_size: int = 4, block_size: int = 1024):

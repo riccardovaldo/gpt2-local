@@ -141,7 +141,7 @@ def main():
         os.makedirs("./models/", exist_ok = True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         if args.use_lora:
-            state_to_save = {k:v for k,v in ft_model.state_dict().item() if k.__contains__("lora")}
+            state_to_save = {k:v for k,v in ft_model.state_dict().items() if "lora" in k}
             save_path = f"./models/model_loraft_{timestamp}.pt"
         else: 
             state_to_save = ft_model.state_dict()

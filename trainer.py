@@ -7,6 +7,7 @@ from data import get_dataloaders
 from model import GPT
 from lora import LoRA, LoRAConfig
 import mlflow
+import json
 
 @torch.no_grad()
 def evaluate_loss(model, val_loader, device):
@@ -143,6 +144,12 @@ def main():
         if args.use_lora:
             state_to_save = {k:v for k,v in ft_model.state_dict().items() if "lora" in k}
             save_path = f"./models/model_loraft_{timestamp}.pt"
+            config_path = f"./models/model_loraft_{timestamp}_config.json"
+            with open(config_path, "w") as file:
+                json.dump(params, file, indent = 4)
+            
+            mlflow.log_artifact(config_path)
+
         else: 
             state_to_save = ft_model.state_dict()
             save_path = f"./models/model_ft_{timestamp}.pt"

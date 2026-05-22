@@ -2,8 +2,9 @@ import os
 import tiktoken
 import torch
 import argparse
+import json
 from model import GPT
-from lora import LoRA
+from lora import LoRA, LoRAConfig
 from pathlib import Path
 
 def parse_args():
@@ -23,7 +24,7 @@ def terminal_chat(model, device = "cuda", temperature = 1.0):
     print("="*50)
 
     while True:
-        input_txt = input("\nYou: ")
+        input_txt = input("You: ")
 
         if input_txt.lower() in ['exit', 'q']:
             print("Goodbye")
@@ -35,22 +36,19 @@ def terminal_chat(model, device = "cuda", temperature = 1.0):
         amp_dtype = torch.float16 if device == "cuda" else torch.bfloat16
 
         generated_tokens = []
-        printed_text = []
+        printed_len = 0
 
         with torch.no_grad():
             with torch.amp.autocast(device_type = device, dtype = amp_dtype):
-                print("\nAssistant: ")
+                print("Assistant: ")
                 for t in model.generate(idx = prompt, max_new_tokens = 100, temperature = temperature):
 
                     generated_tokens.append(t)
                     current_text = enc.decode(generated_tokens)
                     #extracting the new generated words that havent been printed
-                    new_chars = current_text[len(printed_text):]
+                    new_chars = current_text[printed_len:]
                     print(new_chars, end = "", flush = True)
-                    printed_text = current_text
-
-                    if "\n" in new_chars:
-                        break
+                    printed_len = len(current_text)
             print()
 
 
@@ -77,14 +75,21 @@ def main():
 
                 if is_lora:
                     print("Detected Lora checkpoint...")
-                    model_lora = LoRA.inject_lora(model)
+                    lora_config_path = Path(args.checkpoint[:-3] + "_config.json")
+                    print("Loading LoRA config file...")
+                    with open(lora_config_path, "r") as file:
+                        config = json.load(file)
+
+                    lora_config = LoRAConfig(rank = config["lora_rank"],
+                                             alpha = config["lora_alpha"],
+                                             dropout = config["lora_dropout"])
+                    
+                    model_lora = LoRA.inject_lora(model,lora_config)
                     model_lora.load_state_dict(state_dict, strict = False)
-                    model_lora.merge_and_unload()
-                    print("Lora adapters loaded and weights merged.")
-                    model = model_lora
+                    model = LoRA.merge_and_unload(model_lora)
                 else:
                     print("Loading the finetuned weights of the model.")
-                    model.load_state_dict(state_dict, strict = False)
+                    model.load_state_dict(state_dict, strict = True)
             except:
                 raise KeyError("Error in retrieving and laoding the weights.")
 

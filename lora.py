@@ -91,7 +91,7 @@ class LoRA(nn.Module):
                     to_replace.append((m, cn, c))
 
         for m, cn, c in to_replace:
-            print(f"Injecting LoRA on layer: {cn}")
+            # print(f"Injecting LoRA on layer: {cn}")
             lora_layer = cls(c, config)
             setattr(m, cn, lora_layer)
         

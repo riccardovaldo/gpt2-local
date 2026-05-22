@@ -11,6 +11,11 @@ os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 disable_progress_bars()
 transformers.utils.logging.set_verbosity_error()
 
+@dataclass
+class TrainConfig:
+    lr = 3e-4
+    betas = (0.9, 0.95)
+    weight_decay = 0.1 
 
 @dataclass
 class GPTConfig:
@@ -209,11 +214,13 @@ class GPT(nn.Module):
 
 
 
-    def configure_optimizer(self, train_config):
+    def configure_optimizer(self, train_config: TrainConfig = None):
         """ This function return a torch optimizer object containing all the parameter divided into two categories:
             - the one that will experience weight decay
             - the once NOT affected by weight decay like bias, embeddings, layernorm
         """
+        if train_config is None:
+            train_config = TrainConfig()
 
         decay = set()
         no_decay = set()

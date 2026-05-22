@@ -182,7 +182,7 @@ class GPT(nn.Module):
         return logits, loss
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, do_sample = True, top_k = 5, temperature = 1.0):
+    def generate(self, idx, max_new_tokens, do_sample = True, top_k = 50, temperature = 1.0):
 
         for t in range(max_new_tokens):
             idx_cond = idx[:, -self.config.block_size:]

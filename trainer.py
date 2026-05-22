@@ -44,7 +44,10 @@ def train_model(model,
             logits, loss = model(x, targets = y)
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1.0)
+            #only clip gradient of params actually used
+            trainable_params = [p for p in model.parameters() if p.requires_grad]
+            torch.nn.utils.clip_grad_norm_(trainable_params, max_norm = 1.0)
+
             optimizer.step()
             total_train_loss += loss.item()
 
@@ -123,7 +126,7 @@ def main():
         else:
             print("Training the entire model without LoRA")
             model = pretrained_model 
-            optimizer = GPT.configure_optimizer() #optimizer w/ weight decay when performing classic ft
+            optimizer = model.configure_optimizer() #optimizer w/ weight decay when performing classic ft
         
         model = model.to(device)
 
